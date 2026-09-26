@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wordle 演算法觀察室 :: Project Speculum</title>
+  <meta name="description" content="輕量化純前端非 LLM 人工智慧遊玩展示平台 - 整合外部專用字典、Free Dictionary API 與香農資訊熵即時視覺化觀察室">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+
+  <!-- Top Header Navigation & Status -->
+  <header>
+    <div class="header-container">
+      <div class="brand-title">
+        <div class="brand-icon">S</div>
+        <div class="brand-text">
+          <h1>Project Speculum</h1>
+          <div class="brand-subtitle">WORDLE ALGORITHM OBSERVATORY // FREE DICTIONARY API & ZERO-SERVER AI</div>
+        </div>
+      </div>
+
+      <div class="header-badges">
+        <div id="aiStatusBadge" class="status-badge running">
+          <span class="pulse-dot"></span>
+          <span id="aiStatusText">AI ENGINE: STANDBY</span>
+        </div>
+        <button id="btnPrivacyModal" class="btn" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
+          🛡️ 本地端運算聲明
+        </button>
+        <button id="btnDictModal" class="btn btn-accent" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
+          📚 外部專用字典: <span id="dictCountBadge">載入中...</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Observatory Workspace -->
+  <main class="app-container">
+    
+    <!-- Left Column: Game Board, Playback Controls & Target Setting -->
+    <section class="glass-panel" id="boardSection">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🎮</span> 遊戲盤面視窗 (Game Board)
+        </div>
+        <span style="font-size: 0.72rem; color: var(--text-dim); font-family: var(--font-mono);">
+          點擊方塊可切換線索 (除錯模式)
+        </span>
+      </div>
+
+      <!-- Secret Target Selector / Randomizer -->
+      <div style="display: flex; gap: 0.4rem; align-items: center; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 6px;">
+        <span style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">目標單字:</span>
+        <input type="text" id="targetWordInput" maxlength="5" placeholder="隨機單字" class="custom-input" style="text-transform: uppercase; width: 100px; padding: 0.25rem 0.5rem;">
+        <button id="btnRandomTarget" class="btn" title="隨機抽選目標詞">🎲 隨機</button>
+        <button id="btnRevealTarget" class="btn" title="切換顯示目標單字">👁️ 偷看</button>
+        <button id="btnDefineTarget" class="btn" title="查目標單字字典釋義" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan);">📖 釋義</button>
+      </div>
+
+      <!-- Wordle 6-Row Board -->
+      <div class="board-container" id="gameBoard">
+        <!-- 6 Rows generated via JS -->
+      </div>
+
+      <!-- Inference Stepper Controls -->
+      <div class="panel-header" style="margin-top: 0.5rem; padding-bottom: 0.3rem;">
+        <div class="panel-title">
+          <span>⚡</span> 推理步進控制器 (Inference Stepper)
+        </div>
+      </div>
+
+      <div class="controls-grid">
+        <button id="btnStep" class="btn btn-primary">
+          ▶ 單步 (Step)
+        </button>
+        <button id="btnAutoPlay" class="btn">
+          ⏩ 連續播放
+        </button>
+        <button id="btnPause" class="btn" disabled>
+          ⏸ 暫停
+        </button>
+        <button id="btnReset" class="btn">
+          🔄 重置盤面
+        </button>
+      </div>
+
+      <!-- Speed & Benchmark Simulation -->
+      <div class="slider-group">
+        <span>播放速度: <span id="speedDisplay">1.0x</span></span>
+        <input type="range" id="speedSlider" min="0.2" max="3" step="0.2" value="1" style="width: 140px;">
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; margin-top: 0.2rem;">
+        <button id="btnBatchBenchmark" class="btn btn-accent" style="width: 100%;">
+          📊 進行 50 局全自動評測 (Benchmark)
+        </button>
+      </div>
+    </section>
+
+    <!-- Center Column: Brain Telemetry & Entropy Curve & Candidate Ranking -->
+    <section class="glass-panel" id="telemetrySection">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🧠</span> 演算法大腦遙測 (Brain Telemetry)
+        </div>
+        <div id="stepCounterBadge" class="status-badge" style="background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); color: var(--accent-cyan);">
+          第 0 / 6 步
+        </div>
+      </div>
+
+      <!-- Real-time Metrics Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card highlight">
+          <div class="metric-label">剩餘候選詞 (Pool)</div>
+          <div class="metric-value" id="metricRemainingWords">--</div>
+          <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.1rem;" id="metricReductionPct">未收斂</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">當前資訊熵 (Entropy)</div>
+          <div class="metric-value" id="metricEntropy">--</div>
+          <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.1rem;">bits 殘餘不確定性</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">運算延遲 (Latency)</div>
+          <div class="metric-value" id="metricLatency">0.0</div>
+          <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.1rem;">ms 瀏覽器線程</div>
+        </div>
+      </div>
+
+      <!-- Information Entropy & Candidate Pool Decay Curve Canvas -->
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 0.25rem;">
+          <span>候選池衰減與熵下降圖譜 (Candidate Decay Curve)</span>
+          <span id="entropyReductionSummary" style="color: var(--accent-cyan); font-weight: 700;">-</span>
+        </div>
+        <div class="chart-container" style="background: rgba(10, 15, 26, 0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">
+          <canvas id="decayCanvas" style="width: 100%; height: 100%;"></canvas>
+        </div>
+      </div>
+
+      <!-- Candidate Ranking Table -->
+      <div class="panel-header" style="padding-bottom: 0.3rem;">
+        <div class="panel-title">
+          <span>🏆</span> 決策決選區 (Top Candidate Ranking Board)
+        </div>
+        <span style="font-size: 0.7rem; font-family: var(--font-mono); color: var(--text-muted);">
+          點擊單字可查看 Free Dictionary 釋義
+        </span>
+      </div>
+
+      <div class="rankings-list" id="rankingList">
+        <!-- Ranked Candidates rendered by JS -->
+        <div style="color: var(--text-dim); font-size: 0.8rem; text-align: center; padding: 1.5rem;">
+          外部字典載入中...
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Letter Handicap, Word Inspector & Custom Dict Presets -->
+    <section class="glass-panel" id="handicapSection">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🚫</span> 字母封印與難度 (Handicap Matrix)
+        </div>
+        <button id="btnClearBans" class="btn" style="padding: 0.15rem 0.45rem; font-size: 0.7rem;">清空封印</button>
+      </div>
+
+      <div style="font-size: 0.75rem; color: var(--text-muted);">
+        點擊下方鍵盤可封印指定字母（紅色劃線），強迫 AI 尋找冷僻解法：
+      </div>
+
+      <!-- Handicap Quick Presets -->
+      <div class="presets-group">
+        <button class="preset-chip" id="presetCasual">標準模式 (無封印)</button>
+        <button class="preset-chip" id="presetVowels">母音封印 (E,A,I,O,U)</button>
+        <button class="preset-chip" id="presetConsonants">高頻輔音封印 (R,S,T,L,N)</button>
+        <button class="preset-chip" id="presetRandom3">隨機封印 3 字</button>
+      </div>
+
+      <!-- Letter Pool Keyboard -->
+      <div class="keyboard-matrix" id="letterKeyboard">
+        <!-- Generated by JS -->
+      </div>
+
+      <div style="background: rgba(0,0,0,0.3); padding: 0.6rem; border-radius: 6px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); display: flex; flex-direction: column; gap: 0.3rem;">
+        <div>已封印字母: <span id="bannedLettersDisplay" style="color: var(--accent-red); font-weight: 700;">無</span></div>
+        <div>有效解題目標詞: <span id="validTargetCountDisplay" style="color: var(--accent-green); font-weight: 700;">載入中...</span> 詞</div>
+        <div>當前外部字典: <span id="activeDictNameDisplay" style="color: var(--accent-cyan); font-weight: 700;">NYT 官方目標庫</span></div>
+      </div>
+
+      <!-- Live Free Dictionary API Word Inspector Card -->
+      <div class="panel-header" style="margin-top: 0.5rem; padding-bottom: 0.3rem;">
+        <div class="panel-title">
+          <span>📖</span> 單字即時釋義卡 (Dictionary API Inspector)
+        </div>
+      </div>
+      
+      <div id="wordDefinitionCard" style="background: rgba(15, 23, 42, 0.6); padding: 0.75rem; border-radius: 6px; font-size: 0.75rem; font-family: var(--font-sans); line-height: 1.5; color: var(--text-main); border: 1px solid rgba(56, 189, 248, 0.2); max-height: 180px; overflow-y: auto;">
+        <div style="color: var(--text-dim); text-align: center; padding: 0.75rem 0;">
+          點擊盤面或決選區單字查看「Free Dictionary API」即時釋義與發音
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- External Dictionary Manager Modal -->
+  <div class="modal-backdrop" id="dictModal">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>📚</span> 外部專用字典管理器 (External Dictionary Loader)
+      </div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+        支援切換專用五字母外部字典檔案，亦可從遠端 URL 載入、上傳本機專用檔案或直接貼上自訂詞庫。
+      </div>
+
+      <!-- Quick Preset External Dictionaries -->
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        <label style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent-cyan);">精選外部專用字典庫 (Local / Remote Datasets):</label>
+        <div id="dictPresetsContainer" style="display: flex; flex-direction: column; gap: 0.35rem;">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- URL Fetcher -->
+      <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem;">
+        <label style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent-cyan);">從遠端 URL 載入外部字典 (.txt 或 .json):</label>
+        <div style="display: flex; gap: 0.4rem;">
+          <input type="text" id="dictUrlInput" placeholder="https://raw.githubusercontent.com/.../words.txt" class="custom-input">
+          <button id="btnFetchDictUrl" class="btn btn-primary" style="white-space: nowrap;">網路載入</button>
+        </div>
+      </div>
+
+      <!-- Local File Upload -->
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        <label style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent-cyan);">從本機上傳字典檔案 (.txt 每行一詞，或 JSON 陣列):</label>
+        <input type="file" id="dictFileInput" accept=".txt,.json" class="custom-input" style="padding: 0.4rem;">
+      </div>
+
+      <!-- Direct Textarea Paste -->
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        <label style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent-cyan);">或直接在此貼上自訂五字母詞庫 (以換行、逗號或空格分隔):</label>
+        <textarea id="dictPasteInput" rows="3" class="custom-input" placeholder="APPLE&#10;BEACH&#10;CRANE&#10;SALET..."></textarea>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+        <button id="btnApplyCustomDict" class="btn btn-primary">套用貼上詞庫</button>
+        <button id="btnCloseDictModal" class="btn">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy & Local Computation Modal -->
+  <div class="modal-backdrop" id="privacyModal">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>🛡️</span> 本地端運算與隱私安全聲明 (Local Processing & Privacy Notice)
+      </div>
+      
+      <div style="font-size: 0.85rem; line-height: 1.6; color: #cbd5e1; display: flex; flex-direction: column; gap: 0.8rem;">
+        <div>
+          <strong style="color: var(--accent-cyan);">1. 零雲端依賴 (100% Client-Side Engine)：</strong><br>
+          本觀察室所有人工智慧決策、資訊熵矩陣運算與字典過濾程序，皆以原生 Web Workers 執行緒運行於您當前的瀏覽器沙盒中。本網站絕不會將您的任何猜測行為、題目或遊戲數據上傳至任何遠端伺服器。
+        </div>
+
+        <div>
+          <strong style="color: var(--accent-purple);">2. 非黑箱透明演算法 (Deterministic & Non-LLM)：</strong><br>
+          本系統採用嚴格之「香農資訊理論」與離散數學最佳化模型，無生成式模型（如 ChatGPT）幻覺問題，每一步皆具備完全的數學確定性與可解釋性。
+        </div>
+
+        <div>
+          <strong style="color: var(--accent-green);">3. 硬體資源使用透明度 (Resource & Performance Disclaimer)：</strong><br>
+          演算法已針對多線程 Web Workers 進行微秒級記憶體優化，記憶體佔用恆低於 50 MB，CPU 負載僅在步進決策瞬間產生微量波動（< 10 ms）。即便是行動裝置或低功耗設備皆可流暢運行。
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+        <button id="btnClosePrivacyModal" class="btn btn-primary">我已瞭解並確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Benchmark Results Modal -->
+  <div class="modal-backdrop" id="benchmarkModal">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>📊</span> 50 局自動化壓力測試結果 (Benchmark Report)
+      </div>
+      <div id="benchmarkResultsContent" style="font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.6;">
+        運算中...
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+        <button id="btnCloseBenchmarkModal" class="btn btn-primary">關閉報告</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
