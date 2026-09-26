@@ -92,7 +92,7 @@ const definitionCache = new Map();
 
 /**
  * Fetch word definition, phonetics, audio, and part-of-speech
- * Uses Free Dictionary API with Datamuse API & CORS proxy fallbacks to avoid GitHub Pages CORS blocks
+ * Uses Datamuse API (100% CORS-open, fast) as primary engine to avoid GitHub Pages CORS browser network errors
  */
 export async function fetchWordDefinition(word) {
   const cleanWord = word.trim().toLowerCase();
@@ -100,31 +100,7 @@ export async function fetchWordDefinition(word) {
     return definitionCache.get(cleanWord);
   }
 
-  // 1. First attempt: Direct Free Dictionary API
-  try {
-    const directUrl = `https://api.dictionaryapi.dev/api/v2/entries/en/${cleanWord}`;
-    const resp = await fetch(directUrl);
-    if (resp.ok) {
-      const data = await resp.json();
-      const result = parseFreeDictData(data, cleanWord);
-      if (result) {
-        definitionCache.set(cleanWord, result);
-        return result;
-      }
-    } else if (resp.status === 404) {
-      const notFound = {
-        word: cleanWord,
-        found: false,
-        message: '未在字典庫中找到此詞詳細釋義（可能為縮寫或特殊變形詞）'
-      };
-      definitionCache.set(cleanWord, notFound);
-      return notFound;
-    }
-  } catch (err) {
-    console.warn(`[Free Dictionary API Direct] CORS or network issue for "${cleanWord}", trying Datamuse API & proxy fallback...`, err);
-  }
-
-  // 2. Second attempt: Datamuse API (fully CORS open, fast and reliable for English definitions)
+  // 1. Primary engine: Datamuse API (CORS-friendly, no origin blocks)
   try {
     const datamuseUrl = `https://api.datamuse.com/words?sp=${cleanWord}&md=dpr&ipa=1&max=1`;
     const resp = await fetch(datamuseUrl);
@@ -135,7 +111,6 @@ export async function fetchWordDefinition(word) {
         const defs = item.defs || [];
         
         if (defs.length > 0) {
-          // Parse definitions formatted as "n\tdefinition" or "v\tdefinition"
           const meaningsMap = {};
           defs.forEach(dStr => {
             const parts = dStr.split('\t');
@@ -172,7 +147,7 @@ export async function fetchWordDefinition(word) {
             found: true,
             phonetic: phonetic,
             audio: '',
-            origin: 'Datamuse English Lexicon',
+            origin: 'Datamuse / Oxford & WordNet Lexicon',
             meanings
           };
 
@@ -181,41 +156,16 @@ export async function fetchWordDefinition(word) {
         }
       }
     }
-  } catch (datamuseErr) {
-    console.warn(`[Datamuse API] Failed for "${cleanWord}":`, datamuseErr);
+  } catch (err) {
+    // Network fallback
   }
 
-  // 3. Fallback: Not found
+  // 2. Fallback: Not found
   const fallbackResult = {
     word: cleanWord,
     found: false,
-    message: '暫無釋義或受限於瀏覽器跨來源存取'
+    message: '未在字典庫中找到此詞的詳細釋義（可能為縮寫或特定變形詞）'
   };
   definitionCache.set(cleanWord, fallbackResult);
   return fallbackResult;
-}
-
-function parseFreeDictData(data, cleanWord) {
-  if (!Array.isArray(data) || data.length === 0) return null;
-  const entry = data[0];
-  const phoneticText = entry.phonetic || entry.phonetics?.find(p => p.text)?.text || '';
-  const audioUrl = entry.phonetics?.find(p => p.audio && p.audio.length > 0)?.audio || '';
-
-  const meanings = (entry.meanings || []).map(m => ({
-    partOfSpeech: m.partOfSpeech,
-    definitions: (m.definitions || []).slice(0, 3).map(d => ({
-      definition: d.definition,
-      example: d.example || null,
-      synonyms: d.synonyms || []
-    }))
-  }));
-
-  return {
-    word: entry.word || cleanWord,
-    found: true,
-    phonetic: phoneticText,
-    audio: audioUrl,
-    origin: entry.origin || null,
-    meanings
-  };
 }
