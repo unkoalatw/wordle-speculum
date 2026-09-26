@@ -551,11 +551,16 @@ function executeStep() {
     return;
   }
 
+  // Pick best available guess from latest rankings that is valid, avoiding duplicate guesses
+  const guessedWords = new Set(STATE.boardRows.slice(0, STATE.currentStep).map(r => r.word.toLowerCase()));
   let guess = '';
+  
   if (STATE.latestRankings && STATE.latestRankings.length > 0) {
-    guess = STATE.latestRankings[0].word.toLowerCase();
+    const freshPick = STATE.latestRankings.find(r => !guessedWords.has(r.word.toLowerCase()));
+    guess = freshPick ? freshPick.word.toLowerCase() : STATE.latestRankings[0].word.toLowerCase();
   } else if (STATE.candidatePool.length > 0) {
-    guess = STATE.candidatePool[0];
+    const candPick = STATE.candidatePool.find(c => !guessedWords.has(c));
+    guess = candPick || STATE.candidatePool[0];
   } else {
     guess = 'salet';
   }
@@ -650,14 +655,26 @@ function handleFilterDone(filtered) {
   renderDecayChart();
   updateMetrics(newCount, newEntropy, 0);
 
-  if (STATE.isPlaying && STATE.currentStep < STATE.maxSteps && newCount > 0) {
-    const delay = 1000 / STATE.playSpeed;
+  // If auto playing and not reached victory/limit, trigger evaluation and chain next step cleanly upon RANK_RESULT
+  triggerEvaluation();
+}
+
+function handleRankResult(result) {
+  const { rankings, executionTimeMs, currentEntropy } = result;
+  STATE.latestRankings = rankings;
+  
+  updateAIStatusBadge('AI ENGINE: READY', 'ready');
+  updateMetrics(STATE.candidatePool.length, currentEntropy, executionTimeMs);
+  renderRankings(rankings);
+
+  // If in AutoPlay mode and game still active, trigger next step after calculated delay
+  if (STATE.isPlaying && STATE.currentStep < STATE.maxSteps && STATE.candidatePool.length > 0) {
+    const delay = Math.max(250, 1000 / STATE.playSpeed);
     STATE.playTimer = setTimeout(() => {
-      triggerEvaluation();
-      setTimeout(executeStep, 200);
+      if (STATE.isPlaying) {
+        executeStep();
+      }
     }, delay);
-  } else {
-    triggerEvaluation();
   }
 }
 

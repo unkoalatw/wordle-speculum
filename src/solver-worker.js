@@ -69,9 +69,11 @@ function calculateExpectedEntropy(guess, candidates, candidateSet) {
     }
   }
 
-  // Small tie-breaker bonus if the guess is in the remaining candidate pool
+  // Smart tie-breaker bonus:
+  // If in candidate pool, add bonus. When pool is small, heavily favor guessing a candidate directly to win.
   if (candidateSet.has(guess)) {
-    expectedEntropy += 0.0001;
+    const winBonus = total <= 8 ? (1.0 / total) : 0.001;
+    expectedEntropy += winBonus;
   }
 
   return expectedEntropy;
@@ -88,6 +90,7 @@ function rankBestGuesses(candidates, poolToSample, bannedLetters = new Set()) {
   if (totalCand === 1) {
     return {
       rankings: [{ word: candidates[0], entropy: 0, inPool: true, reductionPct: 100 }],
+      bestWord: candidates[0],
       executionTimeMs: performance.now() - startTime,
       currentEntropy: 0
     };
@@ -104,14 +107,13 @@ function rankBestGuesses(candidates, poolToSample, bannedLetters = new Set()) {
     return true;
   });
 
-  // If candidate size is small enough, evaluate valid guess pool (or candidates + top allowed)
-  // If pool is very large (e.g. initial round), limit pool or use precomputed
+  // When candidate pool is small (<= 5), evaluate candidates directly first
   let candidatesToEvaluate = validGuessPool;
-  
-  // Adaptive candidate search space for ultra-fast UI response
-  if (totalCand > 800 && validGuessPool.length > 2000) {
-    // Subsample top high-frequency / rich vowel consonants + candidates
-    candidatesToEvaluate = Array.from(new Set([...candidates, ...validGuessPool.slice(0, 1500)]));
+  if (totalCand <= 6) {
+    // Include all candidates plus top probes
+    candidatesToEvaluate = Array.from(new Set([...candidates, ...validGuessPool.slice(0, 1000)]));
+  } else if (totalCand > 800 && validGuessPool.length > 2000) {
+    candidatesToEvaluate = Array.from(new Set([...candidates, ...validGuessPool.slice(0, 1800)]));
   }
 
   const scores = [];
@@ -126,8 +128,13 @@ function rankBestGuesses(candidates, poolToSample, bannedLetters = new Set()) {
     });
   }
 
-  // Sort descending by entropy
-  scores.sort((a, b) => b.entropy - a.entropy);
+  // Sort descending by entropy; if equal, prioritize inPool words
+  scores.sort((a, b) => {
+    if (Math.abs(b.entropy - a.entropy) > 0.0001) {
+      return b.entropy - a.entropy;
+    }
+    return (b.inPool ? 1 : 0) - (a.inPool ? 1 : 0);
+  });
 
   const duration = performance.now() - startTime;
   return {
