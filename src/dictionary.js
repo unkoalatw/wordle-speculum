@@ -3,27 +3,39 @@
 
 export const EXTERNAL_DICTIONARY_PRESETS = [
   {
+    id: 'google_common',
+    name: 'Google 高頻核心五字庫 (1,367 詞)',
+    desc: '從 Google 10,000 最常用英文詞中篩選的高頻字，極致實用',
+    path: './data/google_common_words.txt'
+  },
+  {
     id: 'nyt_target',
     name: 'NYT 官方標準目標解題庫 (2,315 詞)',
-    desc: '標準 Wordle 每日謎底詞彙庫，無生僻罕見字',
+    desc: '標準 Wordle 每日謎底官方詞彙庫，無生僻罕見字',
     path: './data/nyt_target_words.txt'
   },
   {
     id: 'stanford_sgb',
     name: 'Stanford GraphBase 精選五字庫 (5,757 詞)',
-    desc: '高質量的五字母常用英文詞庫 (Knuth SGB)',
+    desc: '高質量經典英文五字庫 (Donald Knuth SGB)',
     path: './data/sgb_5757_words.txt'
   },
   {
+    id: 'scrabble_dict',
+    name: '官方 Scrabble 拼字比賽五字庫 (8,938 詞)',
+    desc: '國際拼字競賽標準字典 (TWL/CSW) 所有合法五字母詞',
+    path: './data/scrabble_8636_words.txt'
+  },
+  {
     id: 'allowed_expanded',
-    name: 'Wordle 完整擴充猜測庫 (12,954 詞)',
-    desc: '3Blue1Brown 與官方承認的完整試探單字庫',
+    name: 'Wordle 完整擴充合法猜測庫 (12,954 詞)',
+    desc: '3Blue1Brown 與 NYT 官方承認的完整試探單字庫',
     path: './data/allowed_guesses.txt'
   },
   {
     id: 'massive_14k',
     name: '全網極限完整詞彙庫 (14,855 詞)',
-    desc: '包含所有可能合法組合的極大化詞庫',
+    desc: '包含所有英語字典可能合法組合的極大化詞庫',
     path: './data/official_targets.txt'
   }
 ];
